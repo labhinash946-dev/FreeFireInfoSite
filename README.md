@@ -1,6 +1,11 @@
-# Free Fire Info Site — Official Dynamic Media Edition (v2.0.0)
+> **OB55 / v2.2.0:** Active service credentials are bundled in `accounts.txt` using `UID PASSWORD REGION` rows. The owner explicitly approved public distribution of the new BR/VN test-account pairs. No local DPAPI file is required for a fresh checkout.
+> Run `python -m pip install -r requirements-dev.txt`, then `python -m pytest -q`.
+> Local Windows startup: `pwsh -NoProfile -File tools/start-local.ps1` (http://127.0.0.1:5055/).
+> [Account configuration](docs/ACCOUNT_CONFIGURATION.md) | [OB troubleshooting](docs/OB_UPDATE_GUIDE.md) | [Research](docs/OB55_RESEARCH_2026-09-27.md)
 
-[![Version](https://img.shields.io/badge/version-2.0.0-orange.svg)](CHANGELOG.md)
+# Free Fire Info Site — Official Dynamic Media Edition (v2.2.0)
+
+[![Version](https://img.shields.io/badge/version-2.2.0-orange.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Deploy to Vercel](https://vercel.com/button)](https://vercel.com/import/project?template=https://github.com/refatbd/FreeFireInfoSite)
@@ -71,19 +76,18 @@ python -m venv .venv
 
 **Windows (PowerShell):**
 ```powershell
-.venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m flask --app app run --host 127.0.0.1 --port 5055 --no-debugger --no-reload
 ```
 
 **Linux / macOS:**
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
-python app.py
+python -m flask --app app run --host 127.0.0.1 --port 5055 --no-debugger --no-reload
 ```
 
-Open your browser at `http://127.0.0.1:5000`.
+Open your browser at `http://127.0.0.1:5055`. The seven active account groups are in `accounts.txt`; the unscoped, unverified historical inventory is in `accounts-legacy.txt` and is never loaded. See [account configuration](docs/ACCOUNT_CONFIGURATION.md) to replace a shared account.
 
 ---
 
@@ -160,8 +164,8 @@ GET /api/avatar/avatar_<UID>.webp?region=<REGION>
 #### Local URLs Example
 
 ```text
-http://127.0.0.1:5000/api/banner/banner_4422076728.webp?region=BD
-http://127.0.0.1:5000/api/avatar/avatar_4422076728.webp?region=BD
+http://127.0.0.1:5055/api/banner/banner_4422076728.webp?region=BD
+http://127.0.0.1:5055/api/avatar/avatar_4422076728.webp?region=BD
 ```
 
 ---

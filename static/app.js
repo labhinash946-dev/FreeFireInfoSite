@@ -306,7 +306,16 @@ async function handleSearch(event) {
         const data = await response.json();
 
         if (!response.ok || data.error) {
-            throw new Error(data.error || 'Failed to fetch player data from Free Fire official server.');
+            const errorMessages = {
+                PLAYER_NOT_FOUND: 'Player not found in the available regions.',
+                LOOKUP_INCOMPLETE: 'Some regions are temporarily unavailable. Try selecting a region or retry later.',
+                GUEST_AUTH_FAILED: 'The service account could not authenticate. Check its credentials.',
+                UNRECOGNIZED_LOGIN_RESPONSE: 'The service account login did not return a usable token. Check the account and OB protocol.',
+                CREDENTIAL_CONFIG_ERROR: 'A service account is missing or misconfigured. Check the account configuration.',
+                UPSTREAM_HTTP_ERROR: 'The Free Fire service returned an error. Retry later or check the OB update guide.',
+                UPSTREAM_CONNECTION_ERROR: 'Could not reach the Free Fire service. Retry later.'
+            };
+            throw new Error(errorMessages[data.code] || data.error || 'Failed to fetch player data from Free Fire official server.');
         }
 
         const basic = data.basicInfo || {};
@@ -355,7 +364,7 @@ async function handleSearch(event) {
         document.getElementById('val-bio').textContent = social.signature || 'N/A';
 
         // 2. ACCOUNT ACTIVITY
-        document.getElementById('val-rel-ver').textContent = basic.releaseVersion || 'OB54';
+        document.getElementById('val-rel-ver').textContent = basic.releaseVersion || 'Unknown';
         document.getElementById('val-br-pts').textContent = formatNumber(basic.rankingPoints);
         document.getElementById('val-br-max').textContent = basic.maxRank ? `${basic.maxRank}` : 'N/A';
         document.getElementById('val-cs-pts').textContent = formatNumber(basic.csRankingPoints);

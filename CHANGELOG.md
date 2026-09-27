@@ -5,6 +5,42 @@ All notable changes to the **Free Fire Info Site — Official Dynamic Media Edit
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Account distribution
+- With explicit owner authorization, bundle verified BR/VN test credentials in accounts.txt together with the existing active region pairs.
+- Resolve active `UID PASSWORD REGION` rows from accounts.txt; move the unscoped, unverified historical inventory to accounts-legacy.txt. Remove hardcoded pairs from app.py.
+- Keep environment overrides optional and require -UsePrivateCredentials to load Windows DPAPI overrides.
+- Validate login and self player lookup for all seven configured account groups; add metadata-only --self-lookup diagnostics.
+- Run offline tests on GitHub push and pull request, with no live login in CI.
+- Distinguish player-not-found, account/configuration failure, and upstream failure in API and browser messages.
+
+
+### Fixed
+- Stop labeling unverified OB55 field-13 login replies as queues; return UNRECOGNIZED_LOGIN_RESPONSE without caching or blind retries.
+- Keep legacy queue handling scoped to OB54.
+
+### Added
+- Windows local launcher supporting DPAPI-encrypted private credentials; verified owner-created BR/VN accounts restore local login and lookup for both regions; local launcher defaults to port 5055 to avoid a conflicting project.
+- Complete private credential overrides by exact region or group, with validation and form encoding.
+- BR/VN evidence correction, comparison instructions and regression tests.
+
+## [2.2.0] - 2026-09-27
+
+### Fixed
+- Default to OB55 and send a fresh X-GA-SV timestamp for binary requests.
+- Decode the observed 64-byte OB55 login prefix; keep player responses unprefixed.
+- Reject missing tokens, malformed login responses, queue-only replies and unsupported returned servers.
+- Check upstream HTTP errors before decoding; preserve partial gateway failures as inconclusive lookups rather than false player-not-found.
+- Report partial token refresh failure instead of claiming every region refreshed.
+
+### Added
+- Separate OB54/OB55 profiles, synthetic protocol regression tests and opt-in metadata-only live diagnostics.
+- English OB maintenance/troubleshooting runbook and dated research evidence.
+
+### Known limitations
+- BR/VN bundled accounts returned tokenless replies initially misclassified as queues; their semantics remain unverified. Complete official OB55 schema provenance and all-region validation remain outstanding.
+
 ## [2.1.0] - 2026-08-21
 
 ### Added

@@ -24,7 +24,9 @@ from official_media import render_player_avatar, render_player_banner, validate_
 # === Settings ===
 MAIN_KEY = base64.b64decode('WWcmdGMlREV1aDYlWmNeOA==')
 MAIN_IV = base64.b64decode('Nm95WkRyMjJFM3ljaGpNJQ==')
-RELEASEVERSION = "OB54"
+from protocol import (RELEASE_VERSION, LOGIN_URL, UpstreamError, binary_headers,
+                      check_status, decode_login, validate_server)
+RELEASEVERSION = RELEASE_VERSION
 USERAGENT = "Dalvik/2.1.0 (Linux; U; Android 13; CPH2095 Build/RKQ1.211119.001)"
 SUPPORTED_REGIONS = {"IND", "BR", "US", "SAC", "NA", "SG", "RU", "ID", "TW", "VN", "TH", "ME", "PK", "CIS", "BD", "EUROPE"}
 REGION_ALIASES = {"EU": "EUROPE"}
@@ -58,22 +60,8 @@ async def json_to_proto(json_data: str, proto_message: Message) -> bytes:
     return proto_message.SerializeToString()
 
 def get_account_credentials(region: str) -> str:
-    r = region.upper()
-    if r == "IND":
-        return "uid=3692279677&password=473AFFEF67F708CBB0962A958BB2809DA0843EA41BDB70D738FD9527EA04B27B"
-    elif r in {"BR", "US", "SAC", "NA", "EUROPE"}:
-        return "uid=3692292847&password=FC22F6812C850FF7D8DB8C5474A106B6FE22CB10C0A6673837216A32675E5649"
-    elif r == "VN":
-        return "uid=3686689562&password=AD9C4A2B51A749481913F72A36F68A9F231520E9AC29B244DB47A64FD7353A12"
-    elif r == "ID":
-        return "uid=3692307512&password=4AA06E1DB3F998ABDBDA74578D26B0C84700EC5C079751E7C8F1626048DDBCAE"
-    elif r == "TH":
-        return "uid=3692333198&password=0ED64C5A89E09B8BE538829B0304FE5F5F7EA3BBE645A341C73ECA49143D2211"
-    elif r == "TW":
-        return "uid=3692312456&password=1A062FD700DA8F826AF84A37EE2B62121B79516AF71666949C72FFF42D1C554A"
-    else:
-        # SG Primary Global Gateway for BD, ME, PK, CIS, SG, etc.
-        return "uid=3692265171&password=A2A5E3C252A35B2BB30698BD1469A759417A68A069CF6980ED959EB01D352E28"
+    from credentials import get_credentials
+    return get_credentials(region)
 
 # === Token Generation ===
 async def get_access_token(account: str):
@@ -82,34 +70,38 @@ async def get_access_token(account: str):
     headers = {'User-Agent': USERAGENT, 'Connection': "Keep-Alive", 'Accept-Encoding': "gzip", 'Content-Type': "application/x-www-form-urlencoded"}
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(url, data=payload, headers=headers)
-        data = resp.json()
-        return data.get("access_token", "0"), data.get("open_id", "0")
+        check_status(resp, "Guest authentication")
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise UpstreamError('INVALID_GUEST_RESPONSE', 'Guest authentication returned invalid data.') from exc
+        if not isinstance(data, dict) or not data.get('access_token') or not data.get('open_id'):
+            raise UpstreamError('GUEST_AUTH_FAILED', 'Guest authentication did not return required credentials.')
+        return data['access_token'], data['open_id']
 
 async def create_jwt(region: str):
-    try:
-        account = get_account_credentials(region)
-        token_val, open_id = await get_access_token(account)
-        body = json.dumps({"open_id": open_id, "open_id_type": "4", "login_token": token_val, "orign_platform_type": "4"})
-        proto_bytes = await json_to_proto(body, FreeFire_pb2.LoginReq())
-        payload = aes_cbc_encrypt(MAIN_KEY, MAIN_IV, proto_bytes)
-        url = "https://loginbp.ggblueshark.com/MajorLogin"
-        headers = {'User-Agent': USERAGENT, 'Content-Type': "application/octet-stream",
-                   'X-Unity-Version': "2018.4.11f1", 'X-GA': "v1 1", 'ReleaseVersion': RELEASEVERSION}
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, data=payload, headers=headers)
-            msg = json.loads(json_format.MessageToJson(decode_protobuf(resp.content, FreeFire_pb2.LoginRes)))
-            cached_tokens[region] = {
-                'token': f"Bearer {msg.get('token','0')}",
-                'region': msg.get('lockRegion','0'),
-                'server_url': msg.get('serverUrl','0'),
-                'expires_at': time.time() + 25200
-            }
-    except Exception as e:
-        print(f"Error fetching token for region {region}: {e}")
+    account = get_account_credentials(region)
+    token_val, open_id = await get_access_token(account)
+    body = json.dumps({"open_id": open_id, "open_id_type": "4", "login_token": token_val, "orign_platform_type": "4"})
+    proto_bytes = await json_to_proto(body, FreeFire_pb2.LoginReq())
+    payload = aes_cbc_encrypt(MAIN_KEY, MAIN_IV, proto_bytes)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(LOGIN_URL, content=payload, headers=binary_headers())
+    check_status(resp, 'MajorLogin')
+    msg = decode_login(resp.content)
+    ttl = min(msg.ttl or 25200, 25200)
+    cached_tokens[region] = {
+        'token': f'Bearer {msg.token}', 'region': msg.lock_region,
+        'server_url': validate_server(msg.server_url),
+        'expires_at': time.time() + ttl,
+    }
 
 async def initialize_tokens():
     tasks = [create_jwt(r) for r in SUPPORTED_REGIONS]
-    await asyncio.gather(*tasks, return_exceptions=True)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    failed = sum(isinstance(result, Exception) for result in results)
+    if failed:
+        raise UpstreamError('TOKEN_REFRESH_INCOMPLETE', f'{failed} regional token refreshes failed; successful tokens remain available.', 503)
 
 def start_token_refresher():
     def _loop():
@@ -141,14 +133,16 @@ async def GetAccountInformation(uid, unk, region, endpoint):
     payload = await json_to_proto(json.dumps({'a': uid, 'b': unk}), main_pb2.GetPlayerPersonalShow())
     data_enc = aes_cbc_encrypt(MAIN_KEY, MAIN_IV, payload)
     token, lock, server = await get_token_info(region)
-    if not server.startswith("http://") and not server.startswith("https://"):
-        server = "https://" + server
-    headers = {'User-Agent': USERAGENT, 'Content-Type': "application/octet-stream",
-               'Authorization': token, 'X-Unity-Version': "2018.4.11f1", 'X-GA': "v1 1",
-               'ReleaseVersion': RELEASEVERSION}
+    server = validate_server(server)
+    headers = {**binary_headers(), 'Authorization': token}
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(server+endpoint, data=data_enc, headers=headers)
+        resp = await client.post(server+endpoint, content=data_enc, headers=headers)
+    check_status(resp, 'Player lookup')
+    try:
         return json.loads(json_format.MessageToJson(decode_protobuf(resp.content, AccountPersonalShow_pb2.AccountPersonalShowInfo)))
+    except message.DecodeError as exc:
+        raise UpstreamError('INVALID_PLAYER_RESPONSE', 'Player response could not be decoded.') from exc
+
 
 
 GATEWAY_REGIONS = ["BD", "SG", "IND", "BR", "VN", "ID", "TH", "TW"]
@@ -163,7 +157,7 @@ def normalize_region(region: str) -> str:
 
 def get_player_data(uid: str, region: str = None):
     safe_uid = validate_uid(uid)
-    
+
     if region:
         safe_region = normalize_region(region)
         cache_key = (safe_region, safe_uid)
@@ -197,15 +191,17 @@ def get_player_data(uid: str, region: str = None):
                     if basic and basic.get("nickname"):
                         det_reg = basic.get("region") or reg
                         return res, det_reg
-                except Exception:
-                    pass
+                except Exception as exc:
+                    return exc
                 return None
 
             tasks = [_try_reg(r) for r in GATEWAY_REGIONS]
             results = await asyncio.gather(*tasks)
             for res in results:
-                if res is not None:
+                if isinstance(res, tuple):
                     return res
+            if any(isinstance(res, Exception) for res in results):
+                raise UpstreamError('LOOKUP_INCOMPLETE', 'Some login gateways are unavailable. Player lookup could not be completed; try again later or specify a region.', 503)
             return None
 
         result = asyncio.run(_find_auto())
@@ -231,7 +227,7 @@ def media_response(rendered):
 # === Flask Routes ===
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', release_version=RELEASEVERSION)
 
 @app.route('/player-info')
 def get_account_info():
@@ -255,8 +251,12 @@ def get_account_info():
             "policy": "official-free-fire-cdn-only-with-local-fallback",
         }
         return jsonify(return_data), 200
+    except UpstreamError as e:
+        return jsonify({'error': str(e), 'code': e.code}), e.status
+    except httpx.HTTPError:
+        return jsonify({'error': 'Upstream connection failed. Please try again later.', 'code': 'UPSTREAM_CONNECTION_ERROR'}), 502
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": str(e), "code": "PLAYER_NOT_FOUND" if "not found" in str(e).lower() else "INVALID_INPUT"}), 400
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -269,6 +269,10 @@ def get_player_banner(uid):
     try:
         player_data, _, _ = get_player_data(uid, region)
         return media_response(render_player_banner(player_data))
+    except UpstreamError as e:
+        return jsonify({'error': str(e), 'code': e.code}), e.status
+    except httpx.HTTPError:
+        return jsonify({'error': 'Upstream connection failed. Please try again later.', 'code': 'UPSTREAM_CONNECTION_ERROR'}), 502
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -283,6 +287,10 @@ def get_player_avatar(uid):
     try:
         player_data, _, _ = get_player_data(uid, region)
         return media_response(render_player_avatar(player_data))
+    except UpstreamError as e:
+        return jsonify({'error': str(e), 'code': e.code}), e.status
+    except httpx.HTTPError:
+        return jsonify({'error': 'Upstream connection failed. Please try again later.', 'code': 'UPSTREAM_CONNECTION_ERROR'}), 502
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -296,8 +304,10 @@ def refresh_tokens_endpoint():
     try:
         asyncio.run(initialize_tokens())
         return jsonify({'message':'Tokens refreshed for all regions.'}),200
-    except Exception as e:
-        return jsonify({'error': f'Refresh failed: {e}'}),500
+    except UpstreamError as e:
+        return jsonify({'error': str(e), 'code': e.code}), e.status
+    except Exception:
+        return jsonify({'error': 'Token refresh failed.', 'code': 'TOKEN_REFRESH_FAILED'}), 502
 
 if __name__ == '__main__':
     print("[*] Pre-warming regional tokens across all Free Fire gateways...")
@@ -310,6 +320,5 @@ if __name__ == '__main__':
     start_token_refresher()
     print("[*] Free Fire Info Site server starting on http://localhost:5000")
     app.run(host='0.0.0.0', port=5000, debug=False)
-
 
 
