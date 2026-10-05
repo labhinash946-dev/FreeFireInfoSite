@@ -1,0 +1,8 @@
+# Example only. Real credentials must NEVER be committed.
+# Copy to accounts.txt for local development (that file is git-ignored), or set the same rows
+# in the FREEFIRE_ACCOUNTS environment variable on your host. One row per region group:
+#   UID PASSWORD REGION
+# REGION is one of: IND, BR, VN, ID, TH, TW, GLOBAL (GLOBAL serves BD/SG/ME/PK/CIS/RU).
+1234567890 replace-with-password IND
+2345678901 replace-with-password BR
+3456789012 replace-with-password GLOBAL
