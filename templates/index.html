@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Fire Player Info Checker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- Main Search Card Container -->
+        <div class="main-card">
+            
+            <!-- Top App Header & Server Status Pill -->
+            <div class="top-header-bar">
+                <div class="brand-group">
+                    <i class="fa-solid fa-fire-flame-curved brand-icon"></i>
+                    <h2>FREE FIRE <span>INFO API</span></h2>
+                </div>
+                <div class="server-status-pill">
+                    <span class="status-dot"></span>
+                    <span>API Protocol (<strong id="server-ob-version">{{ release_version }} v2.2.0</strong>)</span>
+                </div>
+            </div>
+
+            <!-- Search Control Bar -->
+            <div class="search-section">
+                <form id="search-form" onsubmit="handleSearch(event)">
+                    <div class="search-row">
+                        <div class="field-group uid-field">
+                            <label for="uid-input"><i class="fa-solid fa-id-card"></i> Player UID</label>
+                            <div class="input-action-wrap">
+                                <input type="text" id="uid-input" placeholder="e.g. 4422076728" pattern="[0-9]+" required autocomplete="off">
+                                <button type="submit" id="search-btn" class="search-btn">
+                                    <span class="btn-text"><i class="fa-solid fa-magnifying-glass"></i> Check Info</span>
+                                    <span class="btn-spinner" style="display: none;"><i class="fa-solid fa-circle-notch fa-spin"></i> Fetching...</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="sample-chips">
+                    <span>Try UIDs:</span>
+                    <button type="button" class="chip-btn" onclick="quickFill('4422076728')">4422076728</button>
+                    <button type="button" class="chip-btn" onclick="quickFill('338277714')">338277714</button>
+                    <button type="button" class="chip-btn" onclick="quickFill('3686689562')">3686689562</button>
+                </div>
+            </div>
+
+            <!-- Error Alert Banner -->
+            <div id="error-banner" class="alert-box" style="display: none;"></div>
+
+            <!-- Initial Placeholder -->
+            <div id="initial-placeholder" class="placeholder-box">
+                <i class="fa-solid fa-gamepad placeholder-icon"></i>
+                <h3>Free Fire Player Inspector</h3>
+                <p>Enter any Free Fire player UID to load live profile statistics.</p>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results-wrapper" class="results-wrapper" style="display: none;">
+                
+                <!-- Player Header Summary -->
+                <div class="player-header-summary">
+                    <h1 id="hdr-nickname" class="player-red-title">PLAYER NICKNAME</h1>
+                    <div class="player-meta-bar">
+                        <span>Level <strong id="hdr-level">--</strong></span>
+                        <span class="meta-dot">•</span>
+                        <span>Likes <strong id="hdr-likes">--</strong></span>
+                        <span class="meta-dot">•</span>
+                        <span>Region <strong id="hdr-region">--</strong></span>
+                    </div>
+                    <div class="id-open-pill">
+                        <i class="fa-regular fa-calendar-check"></i> Id open: <span id="hdr-id-open">--</span>
+                    </div>
+                </div>
+
+                <!-- In-Game Profile Banner Box -->
+                <div class="profile-banner-card" id="banner-card-box">
+                    <img id="real-banner-img" src="" alt="Free Fire player banner generated from official game assets" class="real-banner-image">
+                </div>
+                <div id="media-source-status" class="media-source-status" aria-live="polite">
+                    <i class="fa-solid fa-shield-halved"></i> Official Free Fire media loads after lookup
+                </div>
+
+                <!-- 5 Details Cards Grid -->
+                <div class="cards-grid">
+                    
+                    <!-- 1. ACCOUNT INFO -->
+                    <div class="info-card">
+                        <div class="card-header">
+                            <i class="fa-solid fa-user icon-orange"></i>
+                            <h3>ACCOUNT INFO</h3>
+                        </div>
+                        <ul class="data-list">
+                            <li><span class="lbl">UID:</span> <strong id="val-uid">--</strong></li>
+                            <li><span class="lbl">Name:</span> <strong id="val-name">--</strong></li>
+                            <li><span class="lbl">Level:</span> <strong id="val-level">--</strong></li>
+                            <li><span class="lbl">EXP:</span> <strong id="val-exp">--</strong></li>
+                            <li><span class="lbl">Region:</span> <strong id="val-region">--</strong></li>
+                            <li><span class="lbl">Likes:</span> <strong id="val-likes">--</strong></li>
+                            <li><span class="lbl">Gender:</span> <strong id="val-gender">--</strong></li>
+                            <li><span class="lbl">Language:</span> <strong id="val-language">--</strong></li>
+                            <li><span class="lbl">Preferred Mode:</span> <strong id="val-mode-pref">--</strong></li>
+                            <li><span class="lbl">Season ID:</span> <strong id="val-season">--</strong></li>
+                            <li><span class="lbl">Credit Score:</span> <strong id="val-credit">--</strong></li>
+                            <li><span class="lbl">Pin ID:</span> <strong id="val-pin-id">--</strong></li>
+                            <li><span class="lbl">Title:</span> <strong id="val-title">--</strong></li>
+                            <li><span class="lbl">Bio:</span> <strong id="val-bio" class="bio-text">--</strong></li>
+                        </ul>
+                    </div>
+
+                    <!-- 2. ACCOUNT ACTIVITY -->
+                    <div class="info-card">
+                        <div class="card-header">
+                            <i class="fa-solid fa-clipboard-list icon-orange"></i>
+                            <h3>ACCOUNT ACTIVITY</h3>
+                        </div>
+                        <ul class="data-list">
+                            <li><span class="lbl">Release Version:</span> <strong id="val-rel-ver">--</strong></li>
+                            <li><span class="lbl">BR Rank Points:</span> <strong id="val-br-pts">--</strong></li>
+                            <li><span class="lbl">BR Max Rank:</span> <strong id="val-br-max">--</strong></li>
+                            <li><span class="lbl">CS Rank Points:</span> <strong id="val-cs-pts">--</strong></li>
+                            <li><span class="lbl">CS Rank:</span> <strong id="val-cs-rank">--</strong></li>
+                            <li><span class="lbl">CS Max Rank:</span> <strong id="val-cs-max">--</strong></li>
+                            <li><span class="lbl">Diamond Spent:</span> <strong id="val-diamonds">--</strong></li>
+                            <li><span class="lbl">Rank Show Pref:</span> <strong id="val-rank-show">--</strong></li>
+                            <li><span class="lbl">Created At:</span> <strong id="val-created-at">--</strong></li>
+                            <li><span class="lbl">Last Login:</span> <strong id="val-last-login">--</strong></li>
+                        </ul>
+                    </div>
+
+                    <!-- 3. ACCOUNT & CHARACTER OVERVIEW -->
+                    <div class="info-card">
+                        <div class="card-header">
+                            <i class="fa-solid fa-list-check icon-orange"></i>
+                            <h3>ACCOUNT OVERVIEW</h3>
+                        </div>
+                        <ul class="data-list">
+                            <li><span class="lbl">Avatar (Head Pic):</span> <strong id="val-avatar-id">--</strong></li>
+                            <li><span class="lbl">Banner ID:</span> <strong id="val-banner-id">--</strong></li>
+                            <li><span class="lbl">Character Model ID:</span> <strong id="val-char-id">--</strong></li>
+                            <li><span class="lbl">Awaken Selected:</span> <strong id="val-char-awaken">--</strong></li>
+                            <li><span class="lbl">Equipped Clothes:</span> <strong id="val-clothes-cnt">--</strong></li>
+                            <li><span class="lbl">Equipped Skills:</span> <strong id="val-skills-cnt">--</strong></li>
+                            <li><span class="lbl">BP Badges:</span> <strong id="val-bp-badges">--</strong></li>
+                            <li><span class="lbl">BP ID:</span> <strong id="val-bp-id">--</strong></li>
+                            <li><span class="lbl">Account Type:</span> <strong id="val-acc-type">--</strong></li>
+                            <li><span class="lbl">Show BR Rank:</span> <strong id="val-show-br">--</strong></li>
+                            <li><span class="lbl">Show CS Rank:</span> <strong id="val-show-cs">--</strong></li>
+                        </ul>
+                    </div>
+
+                    <!-- 4. PET DETAILS -->
+                    <div class="info-card">
+                        <div class="card-header">
+                            <i class="fa-solid fa-paw icon-orange"></i>
+                            <h3>PET DETAILS</h3>
+                        </div>
+                        <ul class="data-list">
+                            <li><span class="lbl">Pet ID:</span> <strong id="val-pet-id">--</strong></li>
+                            <li><span class="lbl">Pet Level:</span> <strong id="val-pet-lvl">--</strong></li>
+                            <li><span class="lbl">Pet Exp:</span> <strong id="val-pet-exp">--</strong></li>
+                            <li><span class="lbl">Pet Selected:</span> <strong id="val-pet-selected">--</strong></li>
+                            <li><span class="lbl">Pet Skill ID:</span> <strong id="val-pet-skill">--</strong></li>
+                            <li><span class="lbl">Pet Skin ID:</span> <strong id="val-pet-skin">--</strong></li>
+                        </ul>
+                    </div>
+
+                    <!-- 5. GUILD INFO -->
+                    <div class="info-card full-width-card">
+                        <div class="card-header">
+                            <i class="fa-solid fa-people-group icon-orange"></i>
+                            <h3>GUILD INFO</h3>
+                        </div>
+                        <ul class="data-list inline-grid-list">
+                            <li><span class="lbl">Guild Name:</span> <strong id="val-guild-name">--</strong></li>
+                            <li><span class="lbl">Guild ID:</span> <strong id="val-guild-id">--</strong></li>
+                            <li><span class="lbl">Guild Level:</span> <strong id="val-guild-lvl">--</strong></li>
+                            <li><span class="lbl">Guild Members:</span> <strong id="val-guild-members">--</strong></li>
+                        </ul>
+                        
+                        <div class="leader-info-block">
+                            <h4>Leader Info:</h4>
+                            <p id="val-leader-info">--</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Action Controls -->
+                <div class="action-buttons-row">
+                    <button type="button" class="action-btn check-another-btn" onclick="resetSearch()">
+                        <i class="fa-solid fa-rotate-left"></i> Check Another Player
+                    </button>
+                </div>
+
+                <!-- Collapsible Raw JSON Viewer -->
+                <div class="raw-json-accordion">
+                    <div class="accordion-hdr" onclick="toggleRawJson()">
+                        <span><i class="fa-solid fa-code"></i> Complete Raw Garena Server Response (No Missing Data)</span>
+                        <i class="fa-solid fa-chevron-down" id="json-arrow"></i>
+                    </div>
+                    <div class="accordion-body" id="json-body" style="display: none;">
+                        <pre><code id="json-raw-display">{}</code></pre>
+                    </div>
+                <!-- App Footer -->
+                <footer class="app-footer" style="text-align: center; margin-top: 25px; padding: 15px 0; color: #94a3b8; font-size: 0.9rem; border-top: 1px solid rgba(255,255,255,0.08);">
+                    <p>Developed by <a href="https://github.com/refatbd" target="_blank" rel="noopener noreferrer" style="color: #f97316; font-weight: 600; text-decoration: none;"><i class="fa-brands fa-github"></i> refatbd</a></p>
+                </footer>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
